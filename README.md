@@ -1,5 +1,8 @@
 # Chatbot Web App
 
+## Screenshot
+![Webpage Demo](public/demo_ss.png)
+
 This is a web application that allows users to interact with a chatbot powered by Google Generative AI (Gemini). The application is built using Next.js with TypeScript and styled using TailwindCSS. The deployment is done on Vercel.
 
 ## Features
@@ -26,8 +29,7 @@ This is a web application that allows users to interact with a chatbot powered b
    npm run dev
    ```
 
-## Screenshot
-![Webpage Demo](public/demo_ss.png)
+
 
 ## Technologies Used
 - **Frontend**: Next.js, React.js, TypeScript, TailwindCSS
@@ -35,12 +37,4 @@ This is a web application that allows users to interact with a chatbot powered b
 - **Deployment**: Vercel
 
 ## Live Demo
-<<<<<<< HEAD
 Check out the live version of the app: [Chatbot Web App](https://task1-gray-seven.vercel.app/)
-=======
-Check out the live version of the app: [Chatbot Web App](https://task1-gray-seven.vercel.app/)
-
-## License
-This project is licensed under the MIT License.
-
->>>>>>> 9123eb5a3a73eb005e2f5ff560f90f7bac576ec3
