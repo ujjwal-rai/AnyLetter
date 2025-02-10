@@ -2,9 +2,20 @@
 
 import React, { useState, useEffect, useRef } from "react";
 import { GoogleGenerativeAI } from "@google/generative-ai";
+import { useAuth } from '@/contexts/AuthContext';
+import { db } from '@/lib/firebase';
+import { 
+  collection, 
+  addDoc, 
+  updateDoc, 
+  doc, 
+  serverTimestamp,
+  getDoc
+} from 'firebase/firestore';
 
 interface ChatInterfaceProps {
-  onEndChat?: () => void;
+  chatId: string | null;
+  onNewChat: () => void;
 }
 
 interface Message {
@@ -20,16 +31,19 @@ if (!apiKey) {
 const genAI = new GoogleGenerativeAI(apiKey);
 const MODEL_NAME = "gemini-1.5-flash";
 
-const ChatInterface: React.FC<ChatInterfaceProps> = ({ onEndChat }) => {
+const ChatInterface: React.FC<ChatInterfaceProps> = ({ chatId: initialChatId, onNewChat }) => {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [isTyping, setIsTyping] = useState(false);
   const [showScrollButton, setShowScrollButton] = useState(false);
+  const [chatId, setChatId] = useState<string | null>(initialChatId);
   
   const timeoutRef = useRef<NodeJS.Timeout | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const chatContainerRef = useRef<HTMLDivElement>(null);
+
+  const { user } = useAuth();
 
   // Initial greeting
   useEffect(() => {
@@ -75,18 +89,66 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ onEndChat }) => {
     scrollToBottom();
   }, [messages]);
 
+  // Update chatId when prop changes
+  useEffect(() => {
+    setChatId(initialChatId);
+    // Load messages for the selected chat
+    if (initialChatId && user) {
+      const loadMessages = async () => {
+        try {
+          const chatDoc = await getDoc(doc(db, 'chats', initialChatId));
+          if (chatDoc.exists()) {
+            const chatData = chatDoc.data();
+            if (chatData.messages) {
+              setMessages(chatData.messages);
+            }
+          }
+        } catch (error) {
+          console.error("Error loading messages:", error);
+        }
+      };
+      loadMessages();
+    } else {
+      setMessages([]); // Clear messages for new chat
+    }
+  }, [initialChatId, user]);
+
   const sendMessage = async (customMessage?: string) => {
     const messageToSend = customMessage || input.trim();
-    if (!messageToSend) return;
+    if (!messageToSend || isLoading) return;
   
     setIsLoading(true);
-    setMessages(prev => [...prev, { role: "user", content: messageToSend }]);
-    setInput("");
+    const newMessage = { role: "user", content: messageToSend };
   
     try {
+      if (!chatId && user) {
+        // Create new chat
+        const chatRef = await addDoc(collection(db, 'chats'), {
+          userId: user.uid,
+          title: messageToSend.slice(0, 50),
+          timestamp: serverTimestamp(),
+        });
+        setChatId(chatRef.id);
+      }
+
+      // Add message to messages
+      setMessages(prev => [...prev, newMessage]);
+      setInput("");
+
+      // Get AI response
       const model = genAI.getGenerativeModel({ model: MODEL_NAME });
       const result = await model.generateContent(messageToSend);
-      setMessages(prev => [...prev, { role: "bot", content: result.response.text() }]);
+      const aiResponse = { role: "bot", content: result.response.text() };
+      
+      // Save messages to Firebase if user is signed in
+      if (user && chatId) {
+        await updateDoc(doc(db, 'chats', chatId), {
+          messages: [...messages, newMessage, aiResponse],
+          lastUpdated: serverTimestamp(),
+        });
+      }
+
+      setMessages(prev => [...prev, aiResponse]);
     } catch (error) {
       console.error("Error:", error);
       setMessages(prev => [
@@ -105,7 +167,7 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ onEndChat }) => {
     setInput("");
     setIsLoading(false);
     setIsTyping(false);
-    if (onEndChat) onEndChat();
+    if (onNewChat) onNewChat();
   };
 
   const handleScroll = () => {
